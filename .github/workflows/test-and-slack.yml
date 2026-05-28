@@ -122,51 +122,51 @@ jobs:
           fi
 
           PAYLOAD=$(cat <<'JSON'
-          {
-            "attachments": [
-              {
-                "color": "COLOR_PLACEHOLDER",
-                "title": "EMOJI_PLACEHOLDER Test Report - REPO_PLACEHOLDER",
-                "title_link": "RUN_URL_PLACEHOLDER",
-                "fields": [
-                  {
-                    "title": "Branch",
-                    "value": "REF_PLACEHOLDER",
-                    "short": true
-                  },
-                  {
-                    "title": "Status",
-                    "value": "STATUS_PLACEHOLDER",
-                    "short": true
-                  },
-                  {
-                    "title": "Total Tests",
-                    "value": "TOTAL_PLACEHOLDER",
-                    "short": true
-                  },
-                  {
-                    "title": "Passed",
-                    "value": "PASSED_PLACEHOLDER ✅",
-                    "short": true
-                  },
-                  {
-                    "title": "Failed",
-                    "value": "FAILED_PLACEHOLDER ❌",
-                    "short": true
-                  },
-                  {
-                    "title": "Skipped",
-                    "value": "SKIPPED_PLACEHOLDER ⏭️",
-                    "short": true
-                  }
-                ],
-                "footer": "GitHub Actions",
-                "ts": $(date +%s)
-              }
-            ]
-          }
-          JSON
-          )
+{
+  "attachments": [
+    {
+      "color": "COLOR_PLACEHOLDER",
+      "title": "EMOJI_PLACEHOLDER Test Report - REPO_PLACEHOLDER",
+      "title_link": "RUN_URL_PLACEHOLDER",
+      "fields": [
+        {
+          "title": "Branch",
+          "value": "REF_PLACEHOLDER",
+          "short": true
+        },
+        {
+          "title": "Status",
+          "value": "STATUS_PLACEHOLDER",
+          "short": true
+        },
+        {
+          "title": "Total Tests",
+          "value": "TOTAL_PLACEHOLDER",
+          "short": true
+        },
+        {
+          "title": "Passed",
+          "value": "PASSED_PLACEHOLDER ✅",
+          "short": true
+        },
+        {
+          "title": "Failed",
+          "value": "FAILED_PLACEHOLDER ❌",
+          "short": true
+        },
+        {
+          "title": "Skipped",
+          "value": "SKIPPED_PLACEHOLDER ⏭️",
+          "short": true
+        }
+      ],
+      "footer": "GitHub Actions",
+      "ts": "$(date +%s)"
+    }
+  ]
+}
+JSON
+)
           
           PAYLOAD="${PAYLOAD//COLOR_PLACEHOLDER/$COLOR}"
           PAYLOAD="${PAYLOAD//EMOJI_PLACEHOLDER/$EMOJI}"
