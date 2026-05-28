@@ -69,7 +69,7 @@ jobs:
           fi
 
           if [ "${{ steps.extent_report.outputs.found }}" = "true" ]; then
-            REPORT_NOTE="Extent HTML report generated and upload attempted to Slack."
+            REPORT_NOTE="Extent HTML report generated. See artifacts."
           else
             REPORT_NOTE="No Extent HTML report was found."
           fi
@@ -90,19 +90,3 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-
-      - name: Upload Extent HTML report to Slack
-        if: always() && steps.extent_report.outputs.found == 'true'
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          method: files.uploadV2
-          payload: |
-            {
-              "channel_id": "${{ secrets.SLACK_CHANNEL_ID }}",
-              "initial_comment": "Extent HTML report for ${{ github.repository }} on ${{ github.ref_name }}",
-              "file": "${{ steps.extent_report.outputs.report_file }}",
-              "filename": "${{ steps.extent_report.outputs.report_name }}",
-              "title": "Extent Test Report"
-            }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
