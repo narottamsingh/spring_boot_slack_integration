@@ -35,20 +35,54 @@ jobs:
             target/extent-reports/**
           if-no-files-found: warn
 
-      - name: Find latest Extent HTML report
+      - name: Parse test results
         if: always()
-        id: extent_report
+        id: parse_results
         shell: bash
         run: |
-          REPORT_FILE="$(ls -1t target/extent-reports/*.html 2>/dev/null | head -n 1 || true)"
+          REPORT_FILE="target/surefire-reports/TEST-*.xml"
+          TOTAL_TESTS=0
+          PASSED_TESTS=0
+          FAILED_TESTS=0
+          SKIPPED_TESTS=0
+          TEST_DETAILS=""
 
-          if [ -n "$REPORT_FILE" ]; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "report_file=$REPORT_FILE" >> "$GITHUB_OUTPUT"
-            echo "report_name=$(basename "$REPORT_FILE")" >> "$GITHUB_OUTPUT"
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          fi
+          # Parse XML reports
+          for file in $REPORT_FILE; do
+            if [ -f "$file" ]; then
+              # Extract summary metrics
+              TESTS=$(grep -oP 'tests="\K[^"]+' "$file" | head -1)
+              FAILURES=$(grep -oP 'failures="\K[^"]+' "$file" | head -1)
+              SKIPPED=$(grep -oP 'skipped="\K[^"]+' "$file" | head -1)
+
+              TOTAL_TESTS=$((TOTAL_TESTS + ${TESTS:-0}))
+              FAILED_TESTS=$((FAILED_TESTS + ${FAILURES:-0}))
+              SKIPPED_TESTS=$((SKIPPED_TESTS + ${SKIPPED:-0}))
+              PASSED_TESTS=$((TOTAL_TESTS - FAILED_TESTS - SKIPPED_TESTS))
+
+              # Extract failed test details
+              if [ $FAILED_TESTS -gt 0 ]; then
+                while IFS= read -r line; do
+                  if [[ $line == *"<testcase"* ]]; then
+                    TEST_NAME=$(echo "$line" | grep -oP 'name="\K[^"]+')
+                    if grep -A 5 "name=\"$TEST_NAME\"" "$file" | grep -q "<failure\|<error"; then
+                      ERROR_MSG=$(grep -A 2 "name=\"$TEST_NAME\"" "$file" | grep -oP '<failure[^>]*message="\K[^"]+|<error[^>]*message="\K[^"]+' | head -1)
+                      TEST_DETAILS="${TEST_DETAILS}\n❌ ${TEST_NAME}: ${ERROR_MSG}"
+                    fi
+                  fi
+                done < "$file"
+              fi
+            fi
+          done
+
+          # Output results
+          echo "total_tests=$TOTAL_TESTS" >> "$GITHUB_OUTPUT"
+          echo "passed_tests=$PASSED_TESTS" >> "$GITHUB_OUTPUT"
+          echo "failed_tests=$FAILED_TESTS" >> "$GITHUB_OUTPUT"
+          echo "skipped_tests=$SKIPPED_TESTS" >> "$GITHUB_OUTPUT"
+          echo "test_details<<EOF" >> "$GITHUB_OUTPUT"
+          echo -e "$TEST_DETAILS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Build Slack message
         if: always()
@@ -60,33 +94,143 @@ jobs:
           REF="${{ github.ref_name }}"
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
+          TOTAL="${{ steps.parse_results.outputs.total_tests }}"
+          PASSED="${{ steps.parse_results.outputs.passed_tests }}"
+          FAILED="${{ steps.parse_results.outputs.failed_tests }}"
+          SKIPPED="${{ steps.parse_results.outputs.skipped_tests }}"
+          TEST_DETAILS="${{ steps.parse_results.outputs.test_details }}"
+
           if [ "$STATUS" = "success" ]; then
             EMOJI=":white_check_mark:"
-            TEXT="Tests passed"
+            COLOR="#36a64f"
+            STATUS_TEXT="Tests Passed"
           else
             EMOJI=":x:"
-            TEXT="Tests failed"
+            COLOR="#ff0000"
+            STATUS_TEXT="Tests Failed"
           fi
 
-          if [ "${{ steps.extent_report.outputs.found }}" = "true" ]; then
-            REPORT_NOTE="Extent HTML report generated. See artifacts."
-          else
-            REPORT_NOTE="No Extent HTML report was found."
+          # Truncate test details if too long for Slack
+          if [ ${#TEST_DETAILS} -gt 500 ]; then
+            TEST_DETAILS="${TEST_DETAILS:0:500}...\n\n_See full report in artifacts_"
           fi
 
           echo "payload<<EOF" >> "$GITHUB_OUTPUT"
-          cat <<JSON >> "$GITHUB_OUTPUT"
+          cat <<'JSON' >> "$GITHUB_OUTPUT"
           {
-            "text": "${EMOJI} ${TEXT} for *${REPO}* on branch *${REF}*\nRun: ${RUN_URL}\n${REPORT_NOTE}"
+            "attachments": [
+              {
+                "color": "COLOR_PLACEHOLDER",
+                "title": "EMOJI_PLACEHOLDER Test Report - REPO_PLACEHOLDER",
+                "title_link": "RUN_URL_PLACEHOLDER",
+                "fields": [
+                  {
+                    "title": "Branch",
+                    "value": "REF_PLACEHOLDER",
+                    "short": true
+                  },
+                  {
+                    "title": "Status",
+                    "value": "STATUS_PLACEHOLDER",
+                    "short": true
+                  },
+                  {
+                    "title": "Total Tests",
+                    "value": "TOTAL_PLACEHOLDER",
+                    "short": true
+                  },
+                  {
+                    "title": "Passed",
+                    "value": "PASSED_PLACEHOLDER ✅",
+                    "short": true
+                  },
+                  {
+                    "title": "Failed",
+                    "value": "FAILED_PLACEHOLDER ❌",
+                    "short": true
+                  },
+                  {
+                    "title": "Skipped",
+                    "value": "SKIPPED_PLACEHOLDER ⏭️",
+                    "short": true
+                  }
+                ],
+                "footer": "GitHub Actions",
+                "ts": $(date +%s)
+              }
+            ]
           }
           JSON
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+          # Replace placeholders
+          PAYLOAD=$(cat <<'JSON'
+          {
+            "attachments": [
+              {
+                "color": "COLOR_PLACEHOLDER",
+                "title": "EMOJI_PLACEHOLDER Test Report - REPO_PLACEHOLDER",
+                "title_link": "RUN_URL_PLACEHOLDER",
+                "fields": [
+                  {
+                    "title": "Branch",
+                    "value": "REF_PLACEHOLDER",
+                    "short": true
+                  },
+                  {
+                    "title": "Status",
+                    "value": "STATUS_PLACEHOLDER",
+                    "short": true
+                  },
+                  {
+                    "title": "Total Tests",
+                    "value": "TOTAL_PLACEHOLDER",
+                    "short": true
+                  },
+                  {
+                    "title": "Passed",
+                    "value": "PASSED_PLACEHOLDER ✅",
+                    "short": true
+                  },
+                  {
+                    "title": "Failed",
+                    "value": "FAILED_PLACEHOLDER ❌",
+                    "short": true
+                  },
+                  {
+                    "title": "Skipped",
+                    "value": "SKIPPED_PLACEHOLDER ⏭️",
+                    "short": true
+                  }
+                ],
+                "footer": "GitHub Actions",
+                "ts": $(date +%s)
+              }
+            ]
+          }
+          JSON
+          )
+          
+          PAYLOAD="${PAYLOAD//COLOR_PLACEHOLDER/$COLOR}"
+          PAYLOAD="${PAYLOAD//EMOJI_PLACEHOLDER/$EMOJI}"
+          PAYLOAD="${PAYLOAD//REPO_PLACEHOLDER/$REPO}"
+          PAYLOAD="${PAYLOAD//RUN_URL_PLACEHOLDER/$RUN_URL}"
+          PAYLOAD="${PAYLOAD//REF_PLACEHOLDER/$REF}"
+          PAYLOAD="${PAYLOAD//STATUS_PLACEHOLDER/$STATUS_TEXT}"
+          PAYLOAD="${PAYLOAD//TOTAL_PLACEHOLDER/$TOTAL}"
+          PAYLOAD="${PAYLOAD//PASSED_PLACEHOLDER/$PASSED}"
+          PAYLOAD="${PAYLOAD//FAILED_PLACEHOLDER/$FAILED}"
+          PAYLOAD="${PAYLOAD//SKIPPED_PLACEHOLDER/$SKIPPED}"
+
+          echo "final_payload<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$PAYLOAD" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack notification
         if: always()
         uses: slackapi/slack-github-action@v1.24.0
         with:
-          payload: ${{ steps.slack_message.outputs.payload }}
+          payload: ${{ steps.slack_message.outputs.final_payload }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
