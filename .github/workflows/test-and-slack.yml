@@ -161,7 +161,7 @@ jobs:
                   }
                 ],
                 "footer": "GitHub Actions",
-                "ts": $(date +%s)
+                "ts": "$(date +%s)"
               }
             ]
           }
