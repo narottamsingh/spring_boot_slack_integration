@@ -1,0 +1,34 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="spring_boot_slack_integration Suite" verbose="2" parallel="none">
+
+    <listeners>
+        <listener class-name="com.example.spring_boot_slack_integration.ExtentReportListener"/>
+    </listeners>
+
+    <!-- Smoke tests run first, independently -->
+    <test name="Smoke Tests">
+        <groups>
+            <run>
+                <include name="smoke"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="com.example.spring_boot_slack_integration.SmokeTest"/>
+        </classes>
+    </test>
+
+    <!-- Full unit tests -->
+    <test name="Unit Tests">
+        <groups>
+            <run>
+                <include name="math"/>
+                <include name="validation"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="com.example.spring_boot_slack_integration.CalculatorServiceTest"/>
+        </classes>
+    </test>
+
+</suite>
+
