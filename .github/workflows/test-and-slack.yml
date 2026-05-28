@@ -77,29 +77,32 @@ jobs:
           echo "payload<<EOF" >> "$GITHUB_OUTPUT"
           cat <<JSON >> "$GITHUB_OUTPUT"
           {
-            "text": "${EMOJI} ${TEXT} for *${REPO}* on branch *${REF}*\\nRun: ${RUN_URL}\\n${REPORT_NOTE}"
+            "text": "${EMOJI} ${TEXT} for *${REPO}* on branch *${REF}*\nRun: ${RUN_URL}\n${REPORT_NOTE}"
           }
           JSON
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack notification
         if: always()
-        uses: slackapi/slack-github-action@v1.27.0
+        uses: slackapi/slack-github-action@v1.24.0
         with:
           payload: ${{ steps.slack_message.outputs.payload }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
       - name: Upload Extent HTML report to Slack
         if: always() && steps.extent_report.outputs.found == 'true'
-        uses: slackapi/slack-github-action@v1.27.0
+        uses: slackapi/slack-github-action@v1.24.0
         with:
           method: files.uploadV2
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
-            channel_id: "${{ secrets.SLACK_CHANNEL_ID }}"
-            initial_comment: "Extent HTML report for ${{ github.repository }} on ${{ github.ref_name }}"
-            file: "${{ steps.extent_report.outputs.report_file }}"
-            filename: "${{ steps.extent_report.outputs.report_name }}"
-            title: "Extent Test Report"
-
+            {
+              "channel_id": "${{ secrets.SLACK_CHANNEL_ID }}",
+              "initial_comment": "Extent HTML report for ${{ github.repository }} on ${{ github.ref_name }}",
+              "file": "${{ steps.extent_report.outputs.report_file }}",
+              "filename": "${{ steps.extent_report.outputs.report_name }}",
+              "title": "Extent Test Report"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
