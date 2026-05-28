@@ -46,9 +46,6 @@ jobs:
           FAILED_TESTS=0
           SKIPPED_TESTS=0
           TEST_DETAILS=""
-          PASSED_TEST_NAMES=""
-          FAILED_TEST_NAMES=""
-          SKIPPED_TEST_NAMES=""
 
           # Parse XML reports
           for file in $REPORT_FILE; do
@@ -63,26 +60,18 @@ jobs:
               SKIPPED_TESTS=$((SKIPPED_TESTS + ${SKIPPED:-0}))
               PASSED_TESTS=$((TOTAL_TESTS - FAILED_TESTS - SKIPPED_TESTS))
 
-              # Extract all test case names and their status
-              while IFS= read -r line; do
-                if [[ $line == *"<testcase"* ]]; then
-                  TEST_NAME=$(echo "$line" | grep -oP 'name="\K[^"]+')
-                  TEST_CLASS=$(echo "$line" | grep -oP 'classname="\K[^"]+')
-                  
-                  # Check if test has failure or error
-                  if grep -A 5 "name=\"$TEST_NAME\"" "$file" | grep -q "<failure\|<error"; then
-                    ERROR_MSG=$(grep -A 2 "name=\"$TEST_NAME\"" "$file" | grep -oP '<failure[^>]*message="\K[^"]+|<error[^>]*message="\K[^"]+' | head -1)
-                    FAILED_TEST_NAMES="${FAILED_TEST_NAMES}❌ ${TEST_CLASS}.${TEST_NAME}\n   Error: ${ERROR_MSG}\n"
-                    TEST_DETAILS="${TEST_DETAILS}\n❌ ${TEST_NAME}: ${ERROR_MSG}"
-                  # Check if test is skipped
-                  elif grep -A 2 "name=\"$TEST_NAME\"" "$file" | grep -q "<skipped"; then
-                    SKIPPED_TEST_NAMES="${SKIPPED_TEST_NAMES}⏭️ ${TEST_CLASS}.${TEST_NAME}\n"
-                  # Otherwise it passed
-                  else
-                    PASSED_TEST_NAMES="${PASSED_TEST_NAMES}✅ ${TEST_CLASS}.${TEST_NAME}\n"
+              # Extract failed test details
+              if [ $FAILED_TESTS -gt 0 ]; then
+                while IFS= read -r line; do
+                  if [[ $line == *"<testcase"* ]]; then
+                    TEST_NAME=$(echo "$line" | grep -oP 'name="\K[^"]+')
+                    if grep -A 5 "name=\"$TEST_NAME\"" "$file" | grep -q "<failure\|<error"; then
+                      ERROR_MSG=$(grep -A 2 "name=\"$TEST_NAME\"" "$file" | grep -oP '<failure[^>]*message="\K[^"]+|<error[^>]*message="\K[^"]+' | head -1)
+                      TEST_DETAILS="${TEST_DETAILS}\n❌ ${TEST_NAME}: ${ERROR_MSG}"
+                    fi
                   fi
-                fi
-              done < "$file"
+                done < "$file"
+              fi
             fi
           done
 
@@ -93,15 +82,6 @@ jobs:
           echo "skipped_tests=$SKIPPED_TESTS" >> "$GITHUB_OUTPUT"
           echo "test_details<<EOF" >> "$GITHUB_OUTPUT"
           echo -e "$TEST_DETAILS" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          echo "passed_test_names<<EOF" >> "$GITHUB_OUTPUT"
-          echo -e "$PASSED_TEST_NAMES" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          echo "failed_test_names<<EOF" >> "$GITHUB_OUTPUT"
-          echo -e "$FAILED_TEST_NAMES" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          echo "skipped_test_names<<EOF" >> "$GITHUB_OUTPUT"
-          echo -e "$SKIPPED_TEST_NAMES" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Build Slack message
@@ -118,9 +98,6 @@ jobs:
           PASSED="${{ steps.parse_results.outputs.passed_tests }}"
           FAILED="${{ steps.parse_results.outputs.failed_tests }}"
           SKIPPED="${{ steps.parse_results.outputs.skipped_tests }}"
-          PASSED_NAMES="${{ steps.parse_results.outputs.passed_test_names }}"
-          FAILED_NAMES="${{ steps.parse_results.outputs.failed_test_names }}"
-          SKIPPED_NAMES="${{ steps.parse_results.outputs.skipped_test_names }}"
           TEST_DETAILS="${{ steps.parse_results.outputs.test_details }}"
 
           if [ "$STATUS" = "success" ]; then
@@ -133,28 +110,15 @@ jobs:
             STATUS_TEXT="Tests Failed"
           fi
 
-          # Escape special characters for JSON (including newlines)
-          escape_json() {
-            echo "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/g' | sed ':a;N;$!ba;s/\n/\\n/g'
-          }
-
-          REPO=$(escape_json "$REPO")
-          REF=$(escape_json "$REF")
-          RUN_URL=$(escape_json "$RUN_URL")
-          PASSED_NAMES=$(escape_json "$PASSED_NAMES")
-          FAILED_NAMES=$(escape_json "$FAILED_NAMES")
-          SKIPPED_NAMES=$(escape_json "$SKIPPED_NAMES")
-          TEST_DETAILS=$(escape_json "$TEST_DETAILS")
+          # Escape special characters for JSON
+          REPO=$(echo "$REPO" | sed 's/\\/\\\\/g; s/"/\\"/g')
+          REF=$(echo "$REF" | sed 's/\\/\\\\/g; s/"/\\"/g')
+          RUN_URL=$(echo "$RUN_URL" | sed 's/\\/\\\\/g; s/"/\\"/g')
+          TEST_DETAILS=$(echo "$TEST_DETAILS" | sed 's/\\/\\\\/g; s/"/\\"/g')
 
           # Truncate test details if too long for Slack
-          if [ ${#PASSED_NAMES} -gt 300 ]; then
-            PASSED_NAMES="${PASSED_NAMES:0:300}...\\n_See full report in artifacts_"
-          fi
-          if [ ${#FAILED_NAMES} -gt 300 ]; then
-            FAILED_NAMES="${FAILED_NAMES:0:300}...\\n_See full report in artifacts_"
-          fi
-          if [ ${#SKIPPED_NAMES} -gt 300 ]; then
-            SKIPPED_NAMES="${SKIPPED_NAMES:0:300}...\\n_See full report in artifacts_"
+          if [ ${#TEST_DETAILS} -gt 500 ]; then
+            TEST_DETAILS="${TEST_DETAILS:0:500}...\n\n_See full report in artifacts_"
           fi
 
           PAYLOAD=$(cat <<'JSON'
@@ -194,25 +158,10 @@ jobs:
                     "title": "Skipped",
                     "value": "SKIPPED_PLACEHOLDER ⏭️",
                     "short": true
-                  },
-                  {
-                    "title": "Passed Tests",
-                    "value": "PASSED_NAMES_PLACEHOLDER",
-                    "short": false
-                  },
-                  {
-                    "title": "Failed Tests",
-                    "value": "FAILED_NAMES_PLACEHOLDER",
-                    "short": false
-                  },
-                  {
-                    "title": "Skipped Tests",
-                    "value": "SKIPPED_NAMES_PLACEHOLDER",
-                    "short": false
                   }
                 ],
                 "footer": "GitHub Actions",
-                "ts": $(date +%s)
+                "ts": "$(date +%s)"
               }
             ]
           }
@@ -229,9 +178,6 @@ jobs:
           PAYLOAD="${PAYLOAD//PASSED_PLACEHOLDER/$PASSED}"
           PAYLOAD="${PAYLOAD//FAILED_PLACEHOLDER/$FAILED}"
           PAYLOAD="${PAYLOAD//SKIPPED_PLACEHOLDER/$SKIPPED}"
-          PAYLOAD="${PAYLOAD//PASSED_NAMES_PLACEHOLDER/$PASSED_NAMES}"
-          PAYLOAD="${PAYLOAD//FAILED_NAMES_PLACEHOLDER/$FAILED_NAMES}"
-          PAYLOAD="${PAYLOAD//SKIPPED_NAMES_PLACEHOLDER/$SKIPPED_NAMES}"
 
           echo "final_payload<<EOF" >> "$GITHUB_OUTPUT"
           echo "$PAYLOAD" >> "$GITHUB_OUTPUT"
