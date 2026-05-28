@@ -93,7 +93,6 @@ jobs:
           REPO="${{ github.repository }}"
           REF="${{ github.ref_name }}"
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          TIMESTAMP=$(date +%s)
 
           TOTAL="${{ steps.parse_results.outputs.total_tests }}"
           PASSED="${{ steps.parse_results.outputs.passed_tests }}"
@@ -115,59 +114,59 @@ jobs:
           REPO=$(echo "$REPO" | sed 's/\\/\\\\/g; s/"/\\"/g')
           REF=$(echo "$REF" | sed 's/\\/\\\\/g; s/"/\\"/g')
           RUN_URL=$(echo "$RUN_URL" | sed 's/\\/\\\\/g; s/"/\\"/g')
-          TEST_DETAILS=$(echo "$TEST_DETAILS" | sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/g' | tr -d '\n')
+          TEST_DETAILS=$(echo "$TEST_DETAILS" | sed 's/\\/\\\\/g; s/"/\\"/g')
 
           # Truncate test details if too long for Slack
           if [ ${#TEST_DETAILS} -gt 500 ]; then
-            TEST_DETAILS="${TEST_DETAILS:0:500}...\\n\\n_See full report in artifacts_"
+            TEST_DETAILS="${TEST_DETAILS:0:500}...\n\n_See full report in artifacts_"
           fi
 
           PAYLOAD=$(cat <<'JSON'
-{
-  "attachments": [
-    {
-      "color": "COLOR_PLACEHOLDER",
-      "title": "EMOJI_PLACEHOLDER Test Report - REPO_PLACEHOLDER",
-      "title_link": "RUN_URL_PLACEHOLDER",
-      "fields": [
-        {
-          "title": "Branch",
-          "value": "REF_PLACEHOLDER",
-          "short": true
-        },
-        {
-          "title": "Status",
-          "value": "STATUS_PLACEHOLDER",
-          "short": true
-        },
-        {
-          "title": "Total Tests",
-          "value": "TOTAL_PLACEHOLDER",
-          "short": true
-        },
-        {
-          "title": "Passed",
-          "value": "PASSED_PLACEHOLDER ✅",
-          "short": true
-        },
-        {
-          "title": "Failed",
-          "value": "FAILED_PLACEHOLDER ❌",
-          "short": true
-        },
-        {
-          "title": "Skipped",
-          "value": "SKIPPED_PLACEHOLDER ⏭️",
-          "short": true
-        }
-      ],
-      "footer": "GitHub Actions",
-      "ts": "TIMESTAMP_PLACEHOLDER"
-    }
-  ]
-}
-JSON
-)
+          {
+            "attachments": [
+              {
+                "color": "COLOR_PLACEHOLDER",
+                "title": "EMOJI_PLACEHOLDER Test Report - REPO_PLACEHOLDER",
+                "title_link": "RUN_URL_PLACEHOLDER",
+                "fields": [
+                  {
+                    "title": "Branch",
+                    "value": "REF_PLACEHOLDER",
+                    "short": true
+                  },
+                  {
+                    "title": "Status",
+                    "value": "STATUS_PLACEHOLDER",
+                    "short": true
+                  },
+                  {
+                    "title": "Total Tests",
+                    "value": "TOTAL_PLACEHOLDER",
+                    "short": true
+                  },
+                  {
+                    "title": "Passed",
+                    "value": "PASSED_PLACEHOLDER ✅",
+                    "short": true
+                  },
+                  {
+                    "title": "Failed",
+                    "value": "FAILED_PLACEHOLDER ❌",
+                    "short": true
+                  },
+                  {
+                    "title": "Skipped",
+                    "value": "SKIPPED_PLACEHOLDER ⏭️",
+                    "short": true
+                  }
+                ],
+                "footer": "GitHub Actions",
+                "ts": $(date +%s)
+              }
+            ]
+          }
+          JSON
+          )
           
           PAYLOAD="${PAYLOAD//COLOR_PLACEHOLDER/$COLOR}"
           PAYLOAD="${PAYLOAD//EMOJI_PLACEHOLDER/$EMOJI}"
@@ -179,7 +178,6 @@ JSON
           PAYLOAD="${PAYLOAD//PASSED_PLACEHOLDER/$PASSED}"
           PAYLOAD="${PAYLOAD//FAILED_PLACEHOLDER/$FAILED}"
           PAYLOAD="${PAYLOAD//SKIPPED_PLACEHOLDER/$SKIPPED}"
-          PAYLOAD="${PAYLOAD//TIMESTAMP_PLACEHOLDER/$TIMESTAMP}"
 
           echo "final_payload<<EOF" >> "$GITHUB_OUTPUT"
           echo "$PAYLOAD" >> "$GITHUB_OUTPUT"
